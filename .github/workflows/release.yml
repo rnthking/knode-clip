@@ -1,0 +1,52 @@
+name: Release KnodeClip
+
+# 触发：推送 v* tag（git tag v1.0 && git push origin v1.0），或在 Actions 页手动 Run。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14   # 自带 Xcode + Swift
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift 版本
+        run: swift --version
+
+      - name: 编译并打包 KnodeClip.app
+        run: bash build.sh
+
+      - name: 压缩为 KnodeClip.zip（保留 .app 结构）
+        run: ditto -c -k --sequesterRsrc --keepParent KnodeClip.app KnodeClip.zip
+
+      - name: 计算 Release tag
+        id: tagname
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v-manual-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tagname.outputs.tag }}
+          name: KnodeClip ${{ steps.tagname.outputs.tag }}
+          make_latest: true
+          files: KnodeClip.zip
+          body: |
+            **KNode 划线小工具（macOS 12+）**
+
+            下载 `KnodeClip.zip` → 解压 → 拖到「应用程序」。
+            应用未签名，首次打开请 **右键 → 打开**；并在
+            「系统设置 → 隐私与安全性 → 辅助功能」中勾选 KnodeClip。
+
+            固定下载地址：
+            `https://github.com/rnthking/knode-clip/releases/latest/download/KnodeClip.zip`

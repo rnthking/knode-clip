@@ -1,0 +1,4 @@
+.build/
+KnodeClip.app/
+*.swiftpm
+.DS_Store
