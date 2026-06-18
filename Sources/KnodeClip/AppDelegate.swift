@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.toolTip = "KNode 划线（\(hotkeyConfig.display) 收集选中文字）"
         rebuildMenu()
         hotkey = Hotkey(config: hotkeyConfig) { [weak self] in self?.toggleClipMode() }
-        floating = FloatingButton { [weak self] in self?.collectFromPopup() }
+        floating = FloatingButton { [weak self] mode in self?.collectFromPopup(mode) }
         installSelectionWatcher()
         _ = Capture.accessibilityTrusted(prompt: true) // 首次启动引导授权
     }
@@ -66,10 +66,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // 点浮窗时才抓文字：先 AX，取不到再 ⌘C 回退（仅此刻碰一次剪贴板，用完还原）
-    private func collectFromPopup() {
+    private func collectFromPopup(_ mode: String) {
         let text = Capture.selectedText().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { flash("没选中文字"); return }
-        send(text: text)
+        send(text: text, mode: mode)
     }
 
     // 划词模式总开关：热键/菜单都走这里
@@ -92,7 +92,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let clipItem = NSMenuItem(title: "划词收集（\(hotkeyConfig.display) 开关）", action: #selector(toggleClipMode), keyEquivalent: "")
         clipItem.state = popupEnabled ? .on : .off
         menu.addItem(clipItem)
-        menu.addItem(NSMenuItem(title: "收集当前选中", action: #selector(captureAndSend), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "直接收集当前选中", action: #selector(captureAndSend), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "✨ AI 解读当前选中", action: #selector(captureAndAnalyze), keyEquivalent: ""))
         menu.addItem(.separator())
         if Api.isLoggedIn {
             menu.addItem(NSMenuItem(title: "退出登录", action: #selector(logout), keyEquivalent: ""))
@@ -131,8 +132,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() { NSApp.terminate(nil) }
 
-    // 热键路径：现读选区（含 ⌘C 回退）再发送
-    @objc func captureAndSend() {
+    // 菜单/热键：直接收集（原文存卡）
+    @objc func captureAndSend() { captureCurrent(mode: "direct") }
+    // 菜单：AI 解读收集
+    @objc func captureAndAnalyze() { captureCurrent(mode: "ai") }
+
+    private func captureCurrent(mode: String) {
         guard Api.isLoggedIn else { flash("请先登录"); showLogin(); return }
         guard Capture.accessibilityTrusted(prompt: true) else {
             flash("需在「辅助功能」里授权")
@@ -140,20 +145,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let text = Capture.selectedText().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { flash("没选中文字"); return }
-        send(text: text)
+        send(text: text, mode: mode)
     }
 
-    // 浮窗与热键共用的上传逻辑
-    private func send(text: String) {
+    // 浮窗与菜单共用的上传逻辑（mode: direct=直接存卡 / ai=AI 解读）
+    private func send(text: String, mode: String) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         guard Api.isLoggedIn else { flash("请先登录"); showLogin(); return }
         let app = Capture.frontmostAppName()
-        flash("收集中…")
-        Api.postClip(text: text, source: app, sourceTitle: app) { [weak self] result in
+        flash(mode == "ai" ? "✨ 解读收集中…" : "收集中…")
+        Api.postClip(text: text, source: app, sourceTitle: app, mode: mode) { [weak self] result in
             switch result {
             case .success:
-                self?.flash("✓ 已收集")
+                self?.flash(mode == "ai" ? "✓ 已收集(待AI解读)" : "✓ 已收集")
             case .failure(let msg):
                 self?.flash(msg)
                 if msg.contains("过期") { self?.rebuildMenu() }

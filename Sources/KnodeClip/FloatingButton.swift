@@ -1,33 +1,20 @@
 import AppKit
 
-// 淡紫渐变药丸视图：背景层是 CAGradientLayer，居中深紫字，点击回调。
+// 淡紫渐变药丸视图：背景层是 CAGradientLayer，居中文字，点击回调。
 private final class GradientPill: NSView {
     var onClick: (() -> Void)?
-    private let label = NSTextField(labelWithString: "Knode收集")
+    private let label: NSTextField
+    private let c1: NSColor
+    private let c2: NSColor
 
-    override func makeBackingLayer() -> CALayer {
-        let g = CAGradientLayer()
-        g.colors = [
-            NSColor(srgbRed: 0.85, green: 0.80, blue: 1.00, alpha: 1).cgColor, // 淡紫
-            NSColor(srgbRed: 0.72, green: 0.62, blue: 1.00, alpha: 1).cgColor, // 稍深淡紫
-        ]
-        g.startPoint = CGPoint(x: 0, y: 1)
-        g.endPoint = CGPoint(x: 1, y: 0)   // 左上 → 右下
-        g.masksToBounds = true
-        return g
-    }
-
-    // 圆角按高度一半算 → 恒为药丸形（不受尺寸改动影响）
-    override func layout() {
-        super.layout()
-        layer?.cornerRadius = bounds.height / 2
-    }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(text: String, textColor: NSColor, c1: NSColor, c2: NSColor) {
+        self.label = NSTextField(labelWithString: text)
+        self.c1 = c1
+        self.c2 = c2
+        super.init(frame: .zero)
         wantsLayer = true
         label.font = .systemFont(ofSize: 12, weight: .semibold)
-        label.textColor = NSColor(srgbRed: 0.36, green: 0.13, blue: 0.71, alpha: 1) // 深紫
+        label.textColor = textColor
         label.alignment = .center
         label.backgroundColor = .clear
         label.isBezeled = false
@@ -40,17 +27,29 @@ private final class GradientPill: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
+    override func makeBackingLayer() -> CALayer {
+        let g = CAGradientLayer()
+        g.colors = [c1.cgColor, c2.cgColor]
+        g.startPoint = CGPoint(x: 0, y: 1)
+        g.endPoint = CGPoint(x: 1, y: 0)
+        g.masksToBounds = true
+        return g
+    }
+    // 圆角按高度一半算 → 恒为药丸形
+    override func layout() { super.layout(); layer?.cornerRadius = bounds.height / 2 }
     override func mouseDown(with event: NSEvent) { onClick?() }
 }
 
-// 划词后在光标旁冒出的小浮窗，点一下回调 onClick（由外部决定怎么抓文字）。
+// 划词后在光标旁冒出的小浮窗：两颗药丸「收集 / ✨解读」，点哪个回调对应 mode。
 final class FloatingButton: NSObject {
     private var panel: NSPanel?
-    private let onClick: () -> Void
-    private let size = NSSize(width: 84, height: 26)
+    private let onPick: (String) -> Void   // "direct" / "ai"
+    private let pill = NSSize(width: 70, height: 26)
+    private let gap: CGFloat = 8
+    private var size: NSSize { NSSize(width: pill.width * 2 + gap, height: pill.height) }
 
-    init(onClick: @escaping () -> Void) {
-        self.onClick = onClick
+    init(onPick: @escaping (String) -> Void) {
+        self.onPick = onPick
         super.init()
     }
 
@@ -59,8 +58,6 @@ final class FloatingButton: NSObject {
     func show(at point: NSPoint) {
         if panel == nil { panel = makePanel() }
         guard let panel = panel else { return }
-
-        // 默认放在光标右下方一点，避免遮住选区；再夹到屏幕可见区域内
         var origin = NSPoint(x: point.x + 10, y: point.y - size.height - 10)
         let screen = NSScreen.screens.first { $0.frame.contains(point) } ?? NSScreen.main
         if let f = screen?.visibleFrame {
@@ -85,13 +82,32 @@ final class FloatingButton: NSObject {
         p.isOpaque = false
         p.hasShadow = true
 
-        let pill = GradientPill(frame: NSRect(origin: .zero, size: size))
-        pill.onClick = { [weak self] in
-            guard let self = self else { return }
-            self.hide()
-            self.onClick()
-        }
-        p.contentView = pill
+        let container = NSView(frame: NSRect(origin: .zero, size: size))
+
+        // 直接收集（浅紫底 + 深紫字）
+        let direct = GradientPill(text: "收集",
+                                  textColor: NSColor(srgbRed: 0.36, green: 0.13, blue: 0.71, alpha: 1),
+                                  c1: NSColor(srgbRed: 0.85, green: 0.80, blue: 1.00, alpha: 1),
+                                  c2: NSColor(srgbRed: 0.72, green: 0.62, blue: 1.00, alpha: 1))
+        direct.frame = NSRect(x: 0, y: 0, width: pill.width, height: pill.height)
+        direct.onClick = { [weak self] in self?.pick("direct") }
+
+        // AI 解读（深紫底 + 白字）
+        let ai = GradientPill(text: "✨解读",
+                              textColor: .white,
+                              c1: NSColor(srgbRed: 0.55, green: 0.36, blue: 0.96, alpha: 1),
+                              c2: NSColor(srgbRed: 0.42, green: 0.16, blue: 0.84, alpha: 1))
+        ai.frame = NSRect(x: pill.width + gap, y: 0, width: pill.width, height: pill.height)
+        ai.onClick = { [weak self] in self?.pick("ai") }
+
+        container.addSubview(direct)
+        container.addSubview(ai)
+        p.contentView = container
         return p
+    }
+
+    private func pick(_ mode: String) {
+        hide()
+        onPick(mode)
     }
 }

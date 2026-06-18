@@ -33,8 +33,8 @@ enum Api {
         }
     }
 
-    static func postClip(text: String, source: String, sourceTitle: String, completion: @escaping (Result<Void, String>) -> Void) {
-        request(path: "/spark/clip", body: ["text": text, "source": source, "sourceTitle": sourceTitle], auth: true) { result in
+    static func postClip(text: String, source: String, sourceTitle: String, mode: String, completion: @escaping (Result<Void, String>) -> Void) {
+        request(path: "/spark/clip", body: ["text": text, "source": source, "sourceTitle": sourceTitle, "mode": mode], auth: true) { result in
             switch result {
             case .failure(let e): completion(.failure(e))
             case .success(let json):
