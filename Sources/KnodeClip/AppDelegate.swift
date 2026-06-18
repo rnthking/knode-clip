@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey = Hotkey(config: hotkeyConfig) { [weak self] in self?.toggleClipMode() }
         floating = FloatingButton { [weak self] mode in self?.collectFromPopup(mode) }
         installSelectionWatcher()
+        Api.fetchAIKey()  // 同步后台下发的 DeepSeek Key
         _ = Capture.accessibilityTrusted(prompt: true) // 首次启动引导授权
     }
 

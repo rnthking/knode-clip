@@ -16,6 +16,12 @@ enum Api {
     }
     static var isLoggedIn: Bool { !((token ?? "").isEmpty) }
 
+    // 后台下发的 DeepSeek Key（与 Web 同源；目前 AI 解读在 Web 完成，这里先同步缓存备用）
+    static var dsKey: String? {
+        get { UserDefaults.standard.string(forKey: "knode_ds_key") }
+        set { UserDefaults.standard.set(newValue, forKey: "knode_ds_key") }
+    }
+
     static func login(email: String, password: String, completion: @escaping (Result<Void, String>) -> Void) {
         request(path: "/spark/auth/login", body: ["email": email, "password": password], auth: false) { result in
             switch result {
@@ -25,12 +31,25 @@ enum Api {
                    let data = json["data"] as? [String: Any],
                    let tok = data["token"] as? String {
                     token = tok
+                    fetchAIKey()   // 登录后同步后台的 DeepSeek Key
                     completion(.success(()))
                 } else {
                     completion(.failure((json["msg"] as? String) ?? "登录失败"))
                 }
             }
         }
+    }
+
+    // 拉取后台配置的 DeepSeek Key 并缓存（公开接口，无需鉴权）
+    static func fetchAIKey() {
+        guard let url = URL(string: base + "/spark/ai-key") else { return }
+        URLSession.shared.dataTask(with: url) { data, _, _ in
+            guard let data = data,
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let d = obj["data"] as? [String: Any],
+                  let k = d["key"] as? String, !k.isEmpty else { return }
+            dsKey = k
+        }.resume()
     }
 
     static func postClip(text: String, source: String, sourceTitle: String, mode: String, completion: @escaping (Result<Void, String>) -> Void) {
