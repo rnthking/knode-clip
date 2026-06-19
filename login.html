@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<style>
+  body{ font-family:-apple-system,system-ui,"Microsoft YaHei",sans-serif; margin:0; padding:24px; background:#f4f1ec; color:#1a1625; }
+  h3{ margin:0 0 4px; font-size:16px; }
+  .sub{ font-size:12px; color:#9d96ae; margin-bottom:16px; }
+  input{ width:100%; box-sizing:border-box; font-size:14px; padding:10px 12px; border:1.5px solid #e3e0da; border-radius:9px; margin-bottom:10px; outline:none; }
+  input:focus{ border-color:#7c3aed; }
+  button{ width:100%; padding:11px; border:none; border-radius:10px; background:linear-gradient(135deg,#a78bfa,#7c3aed); color:#fff; font-size:14px; font-weight:700; cursor:pointer; }
+  button:disabled{ opacity:.6; }
+  .msg{ font-size:12px; color:#dc2626; min-height:16px; margin-top:8px; }
+</style></head>
+<body>
+  <h3>登录 KNode</h3>
+  <div class="sub">与网页端同一账号（spark.ithinkai.cn）</div>
+  <input id="email" type="email" placeholder="邮箱" autofocus>
+  <input id="pass" type="password" placeholder="密码">
+  <button id="btn">登录</button>
+  <div class="msg" id="msg"></div>
+  <script>
+    const $ = id => document.getElementById(id);
+    async function go(){
+      const e = $('email').value.trim(), p = $('pass').value;
+      if(!e || !p){ $('msg').textContent = '请输入邮箱和密码'; return; }
+      $('btn').disabled = true; $('btn').textContent = '登录中…';
+      const r = await window.knode.login(e, p);
+      if(r.ok){ window.knode.done(); }
+      else { $('msg').textContent = r.msg || '登录失败'; $('btn').disabled = false; $('btn').textContent = '登录'; }
+    }
+    $('btn').onclick = go;
+    document.addEventListener('keydown', e => { if(e.key === 'Enter') go(); });
+  </script>
+</body></html>

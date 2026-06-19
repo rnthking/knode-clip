@@ -1,39 +1,36 @@
-# KNode 划线（macOS 菜单栏小工具）
+# KnodeClip · 划线收集小工具（Windows / macOS）
 
-在**任意 App**里选中一段文字，按热键（默认 `⌥⌘C`，可改），就把它发到 KNode 的「收集箱」。之后在网页端可一键转成知识卡片。
-
-## 两种收集方式
-- **浮窗（默认开）**：选中文字松手后，光标旁会冒出一个「Knode收集」小浮窗，点一下就收进收集箱；在别处点一下/按键它就消失。可在菜单里「选中即显浮窗」开关。
-- **快捷键**：选中文字后按热键（默认 `⌥⌘C`，可在「设置…」改）。
+在任意 App 选中文字，按 `Ctrl/⌘ + Shift + K`，就把它收进 KNode 的「收集箱」，在网页端「知识卡片 → 最近收集」里可见、可 AI 转卡片。
 
 ## 它怎么工作
-- 菜单栏一个荧光笔图标（SF Symbol），无 Dock 图标（`LSUIElement`）。
-- 浮窗只用 **辅助功能(Accessibility)** 读选区（不碰你的剪贴板）；热键路径读不到时会**模拟 ⌘C**读剪贴板（用完自动还原）。
-- 记录来源 = 当前前台 App 名。
-- 登录后 token 存在本机 `UserDefaults`，上传走 `POST /spark/clip`（Bearer）。
+- 托盘常驻（无主窗口）。
+- 按热键时，应用会对前台**模拟一次复制**（mac=osascript，win=PowerShell SendKeys，linux=xdotool），读剪贴板内容上传，再**还原**你原来的剪贴板。
+- 两种收集模式（托盘菜单切换）：**直接收集**（原文存卡）/ **AI 解读**（DeepSeek，解读在网页端完成）。
 
-## 构建
-需要 Xcode 命令行工具（`swift` 可用）。
+## 安装
+- **macOS**：下载 `KnodeClip-mac.dmg` → 拖到「应用程序」。未签名，首次**右键 → 打开**；若提示「已损坏」，终端执行
+  `xattr -dr com.apple.quarantine /Applications/KnodeClip.app`。
+  还需在 **系统设置 → 隐私与安全性 → 辅助功能** 勾选 KnodeClip（模拟复制需要）。
+- **Windows**：下载 `KnodeClip-win.exe` 安装。首次 SmartScreen 提示 → 「更多信息 → 仍要运行」。
 
+固定下载地址（GitHub 最新 Release）：
+- mac：`https://github.com/rnthking/knode-clip/releases/latest/download/KnodeClip-mac.dmg`
+- win：`https://github.com/rnthking/knode-clip/releases/latest/download/KnodeClip-win.exe`
+
+## 使用
+1. 托盘 ✎ 图标 → **登录…**（与网页端同一账号）。
+2. 选「收集模式」：直接 / AI 解读。
+3. 任意 App 选中文字 → `Ctrl/⌘ + Shift + K` → 托盘提示「✓ 已收集」。
+4. 网页端 → 知识卡片 → 最近收集 查看。
+
+## 本地开发 / 打包
 ```bash
-bash build.sh   # 外置盘可能禁止直接执行脚本，用 bash 起最稳
+npm install
+npm start          # 本地运行
+npm run dist       # 当前平台打包到 release/
 ```
 
-产出 `KnodeClip.app`。`open KnodeClip.app` 启动，或直接双击。
-
-> 开发期也可以 `swift run`（不打包成 .app，但热键/辅助功能授权同样需要）。
-
-## 首次使用
-1. 启动后点菜单栏 `✎` → **登录…**，输入 KNode 邮箱/密码（与网页端同一账号）。
-2. 系统会弹**辅助功能**授权：系统设置 → 隐私与安全性 → 辅助功能 → 勾选 KnodeClip（首次没勾也能用 ⌘C 回退，但建议开，体验更稳）。
-3. 在任意 App 选中文字 → 点光标旁的「Knode收集」浮窗，或按热键（默认 `⌥⌘C`）。菜单栏图标会闪「✓ 已收集」。
-4. 打开 KNode 网页端 → 收集箱，即可看到，并可「AI 转卡片」。
-
-## 配置
-- **浮窗开关**：菜单栏图标 → 勾选/取消「选中即显浮窗」。
-- **改热键**：菜单栏图标 → **设置…** → 点方框 → 按下想用的组合键（需含 ⌘/⌥/⌃ 之一），即时生效并记住；可「恢复默认（⌥⌘C）」。
-- 服务器地址：`Sources/KnodeClip/Api.swift` 里的 `base`，默认 `https://spark.ithinkai.cn`，本地联调可改 `http://localhost:8000`。
-
 ## 说明 / 限制
-- 未做代码签名/公证，仅本机自用；分发给他人需 Apple Developer 账号签名+公证。
-- 浏览器等 App 里若 Accessibility 读不到选中文字，会自动用 ⌘C 回退。
+- 未签名/未公证，分发给他人会有系统拦截提示（按上面步骤打开）。
+- macOS 当前 Release 为 Apple Silicon(arm64)。
+- 旧的 macOS 原生 Swift 版在 `macos-swift/`（已归档，不再维护）。
