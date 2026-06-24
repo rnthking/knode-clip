@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var floating: FloatingButton?
     private var cardPopup: CardPopup?
+    private var lastSelPoint: NSPoint = .zero   // 最近一次划词位置（卡片在此下方弹出）
     private var mouseUpMonitor: Any?
     private var dismissMonitor: Any?
     private var downPoint: NSPoint = .zero
@@ -61,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard Capture.accessibilityTrusted(prompt: false) else { return }
             let ax = (Capture.selectedTextAXOnly() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !ax.isEmpty || dragged {
+                self.lastSelPoint = up        // 记下划词位置，AI 卡片在此下方弹出
                 self.floating?.show(at: up)   // 有 AX 选中，或发生了拖拽 → 弹浮窗（点击时再抓文字）
             } else {
                 self.floating?.hide()
@@ -79,16 +81,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // ✨ AI 解读：调 DeepSeek 出解读 → 弹卡片 → 点「加入卡片」才上传成知识点卡片
     private func showAICard(text: String) {
         guard Api.isLoggedIn else { flash("请先登录"); showLogin(); return }
-        cardPopup?.showLoading()
+        let anchor = lastSelPoint
+        cardPopup?.showLoading(near: anchor)
         Api.analyze(text: text) { [weak self] result in
             guard let self = self else { return }
             switch result {
             case .success(let card):
-                self.cardPopup?.showCard(card, text: text) { [weak self] in
+                self.cardPopup?.showCard(card, text: text, near: anchor) { [weak self] in
                     self?.addAICard(text: text)
                 }
             case .failure(let msg):
-                self.cardPopup?.showError(msg)
+                self.cardPopup?.showError(msg, near: anchor)
             }
         }
     }
