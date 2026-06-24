@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyConfig = HotkeyConfig.load()
 
     private var floating: FloatingButton?
+    private var cardPopup: CardPopup?
     private var mouseUpMonitor: Any?
     private var dismissMonitor: Any?
     private var downPoint: NSPoint = .zero
@@ -22,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
         hotkey = Hotkey(config: hotkeyConfig) { [weak self] in self?.toggleClipMode() }
         floating = FloatingButton { [weak self] mode in self?.collectFromPopup(mode) }
+        cardPopup = CardPopup()
         installSelectionWatcher()
         Api.fetchAIKey()  // 同步后台下发的 DeepSeek Key
         _ = Capture.accessibilityTrusted(prompt: true) // 首次启动引导授权
@@ -70,7 +72,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func collectFromPopup(_ mode: String) {
         let text = Capture.selectedText().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { flash("没选中文字"); return }
-        send(text: text, mode: mode)
+        if mode == "ai" { showAICard(text: text) }   // ✨解读 → 桌面就地弹解读卡片
+        else { send(text: text, mode: "direct") }     // 收集 → 直接存卡
+    }
+
+    // ✨ AI 解读：调 DeepSeek 出解读 → 弹卡片 → 点「加入卡片」才上传成知识点卡片
+    private func showAICard(text: String) {
+        guard Api.isLoggedIn else { flash("请先登录"); showLogin(); return }
+        cardPopup?.showLoading()
+        Api.analyze(text: text) { [weak self] result in
+            guard let self = self else { return }
+            switch result {
+            case .success(let card):
+                self.cardPopup?.showCard(card, text: text) { [weak self] in
+                    self?.addAICard(text: text)
+                }
+            case .failure(let msg):
+                self.cardPopup?.showError(msg)
+            }
+        }
+    }
+
+    // 「加入卡片」：上传成 AI 卡片（网页端「知识卡片」即可见）
+    private func addAICard(text: String) {
+        let app = Capture.frontmostAppName()
+        Api.postClip(text: text, source: app, sourceTitle: app, mode: "ai") { [weak self] result in
+            switch result {
+            case .success:
+                self?.cardPopup?.hide()
+                self?.flash("✓ 已加入卡片")
+            case .failure(let msg):
+                self?.flash(msg)
+            }
+        }
     }
 
     // 划词模式总开关：热键/菜单都走这里

@@ -1,7 +1,8 @@
 name: Release KnodeClip
 
-# 推送 v* tag（git tag v2.0.0 && git push origin v2.0.0）或手动 Run；
-# 在 macOS 与 Windows 两个 runner 上各自用 electron-builder 出安装包，统一上传到同一个 Release。
+# 推送 v* tag（git tag v3.0.0 && git push origin v3.0.0）或手动 Run。
+# macOS = 原生 Swift 版（划词开关 + 自动药丸浮窗 + AI 解读卡片，需辅助功能授权）。
+# Windows = Electron 热键版（选中文字按 Ctrl+Shift+K 收集）。
 on:
   push:
     tags:
@@ -12,12 +13,42 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+  # ---------- macOS：原生 Swift ----------
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native Swift app
+        run: |
+          cd macos-swift
+          chmod +x build.sh
+          ./build.sh
+      - name: Package dmg
+        run: |
+          cd macos-swift
+          mkdir -p dist
+          hdiutil create -volname "KnodeClip" -srcfolder "KnodeClip.app" -ov -format UDZO "dist/KnodeClip-mac.dmg"
+      - name: Compute tag
+        id: t
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"; else echo "tag=v-manual-${{ github.run_number }}" >> "$GITHUB_OUTPUT"; fi
+      - name: Publish to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.t.outputs.tag }}
+          name: KnodeClip ${{ steps.t.outputs.tag }}
+          make_latest: true
+          body: |
+            **KnodeClip**
+            - **macOS（原生版 · 推荐）**：下载 `KnodeClip-mac.dmg` → 拖到「应用程序」。未签名：首次右键→打开；如提示「已损坏」，终端执行 `xattr -dr com.apple.quarantine /Applications/KnodeClip.app`。首次运行在「系统设置→隐私与安全性→辅助功能」勾选 KnodeClip。
+              用法：菜单栏图标 → 登录 → 按 `⌘⇧K` 开启划词（绿点🟢）→ 选中文字松手即弹药丸浮窗「收集 / ✨解读」→ ✨解读弹卡片 → 「加入卡片」。
+            - **Windows（Electron 热键版）**：下载 `KnodeClip-win.exe` 安装。选中文字按 `Ctrl+Shift+K` 收集（收集模式在托盘菜单切）。
+          files: |
+            macos-swift/dist/KnodeClip-mac.dmg
+
+  # ---------- Windows：Electron ----------
+  win:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,8 +56,8 @@ jobs:
           node-version: 20
       - name: Install deps
         run: npm install
-      - name: Build (electron-builder)
-        run: npx electron-builder --publish never
+      - name: Build (electron-builder, win only)
+        run: npx electron-builder --win --publish never
       - name: Compute tag
         id: t
         shell: bash
@@ -38,12 +69,5 @@ jobs:
           tag_name: ${{ steps.t.outputs.tag }}
           name: KnodeClip ${{ steps.t.outputs.tag }}
           make_latest: true
-          body: |
-            **KnodeClip 跨平台（Windows / macOS）**
-            - macOS：下载 `KnodeClip-mac.dmg`，拖到「应用程序」。未签名：首次右键→打开；如提示「已损坏」，终端执行 `xattr -dr com.apple.quarantine /Applications/KnodeClip.app`。还需在「系统设置→隐私与安全性→辅助功能」勾选 KnodeClip（模拟复制要用）。
-            - Windows：下载 `KnodeClip-win.exe` 安装。首次运行 SmartScreen 提示「更多信息→仍要运行」。
-            用法：登录同一账号 → 选中文字 → 按 `Ctrl/⌘+Shift+K` 收集。
           files: |
-            release/*.dmg
             release/*.exe
-            release/*.AppImage
