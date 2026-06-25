@@ -230,7 +230,7 @@ final class CardPopup: NSObject {
         place(p, height: H, root: root, near: anchor)
     }
 
-    func hide() { panel?.orderOut(nil) }
+    func hide() { panel?.orderOut(nil); NSApp.deactivate() }   // 让出激活态，恢复全局划词监听
 
     @objc private func closeTapped() { hide() }
 }

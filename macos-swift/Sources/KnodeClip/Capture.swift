@@ -66,10 +66,18 @@ enum Capture {
         let cmd: CGKeyCode = 0x37  // Command
         let cKey: CGKeyCode = 0x08 // C
         let loc = CGEventTapLocation.cghidEventTap
-        let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: cmd, keyDown: true)
-        let cDown = CGEvent(keyboardEventSource: src, virtualKey: cKey, keyDown: true); cDown?.flags = .maskCommand
-        let cUp = CGEvent(keyboardEventSource: src, virtualKey: cKey, keyDown: false); cUp?.flags = .maskCommand
-        let cmdUp = CGEvent(keyboardEventSource: src, virtualKey: cmd, keyDown: false)
-        cmdDown?.post(tap: loc); cDown?.post(tap: loc); cUp?.post(tap: loc); cmdUp?.post(tap: loc)
+        // ⌘ 按下时事件本身要带 .maskCommand；⌘ 抬起时 flags 必须清空。
+        // 每步之间留极短间隔，避免事件被合并 / ⌘「卡住」导致后续划词变成 ⌘+拖拽而选不中。
+        let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: cmd, keyDown: true);  cmdDown?.flags = .maskCommand
+        let cDown   = CGEvent(keyboardEventSource: src, virtualKey: cKey, keyDown: true);  cDown?.flags = .maskCommand
+        let cUp     = CGEvent(keyboardEventSource: src, virtualKey: cKey, keyDown: false); cUp?.flags = .maskCommand
+        let cmdUp   = CGEvent(keyboardEventSource: src, virtualKey: cmd, keyDown: false);  cmdUp?.flags = []
+        cmdDown?.post(tap: loc); usleep(9000)
+        cDown?.post(tap: loc);   usleep(9000)
+        cUp?.post(tap: loc);     usleep(9000)
+        cmdUp?.post(tap: loc);   usleep(5000)
+        // 兜底：再单独抬一次 ⌘，确保修饰键彻底释放（防止极少数情况下卡住）
+        let cmdUp2 = CGEvent(keyboardEventSource: src, virtualKey: cmd, keyDown: false); cmdUp2?.flags = []
+        cmdUp2?.post(tap: loc)
     }
 }
