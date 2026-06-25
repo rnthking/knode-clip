@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 // 桌面 AI 解读卡片浮层：点药丸「✨解读」后，在划词位置「下方」弹出一张精致卡片
 // （引文 + ✦一句话解读 + 💡关键点 + 🤔追问 + 💎加入知识卡片 + 底部小字）。
@@ -231,6 +232,27 @@ final class CardPopup: NSObject {
     }
 
     func hide() { panel?.orderOut(nil); NSApp.deactivate() }   // 让出激活态，恢复全局划词监听
+
+    // 「加入卡片」成功后：卡片淡出 + 轻微缩小下沉的收尾动效，再收起
+    func animateOut(completion: (() -> Void)? = nil) {
+        guard let panel = panel, panel.isVisible else { hide(); completion?(); return }
+        let start = panel.frame
+        let dx = start.width * 0.05, dy = start.height * 0.05
+        let end = NSRect(x: start.origin.x + dx, y: start.origin.y + dy - 10,
+                         width: start.width - dx * 2, height: start.height - dy * 2)
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.24
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+            panel.animator().setFrame(end, display: true)
+        }, completionHandler: {
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            panel.setFrame(start, display: false)   // 复位，下次正常弹出
+            NSApp.deactivate()
+            completion?()
+        })
+    }
 
     @objc private func closeTapped() { hide() }
 }

@@ -41,7 +41,12 @@ enum Capture {
     // —— 回退：模拟 ⌘C，读剪贴板，再把用户原剪贴板还原 ——
     private static func copyViaCmdC() -> String {
         let pb = NSPasteboard.general
-        let saved = pb.string(forType: .string)
+        // 完整快照用户原剪贴板（含图片/文件等所有类型）——划词探测很频繁，必须原样还原，不能只保字符串
+        let saved: [[NSPasteboard.PasteboardType: Data]] = (pb.pasteboardItems ?? []).map { item in
+            var dict = [NSPasteboard.PasteboardType: Data]()
+            for t in item.types { if let d = item.data(forType: t) { dict[t] = d } }
+            return dict
+        }
         let savedCount = pb.changeCount
         sendCmdC()
         var result = ""
@@ -53,10 +58,16 @@ enum Capture {
             }
             usleep(20_000)
         }
-        // 稍后还原原剪贴板，避免污染用户的复制内容
+        // 稍后原样还原用户剪贴板，避免污染他的复制内容
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             pb.clearContents()
-            if let saved = saved { pb.setString(saved, forType: .string) }
+            let items = saved.compactMap { dict -> NSPasteboardItem? in
+                guard !dict.isEmpty else { return nil }
+                let it = NSPasteboardItem()
+                for (t, d) in dict { it.setData(d, forType: t) }
+                return it
+            }
+            if !items.isEmpty { pb.writeObjects(items) }
         }
         return result
     }

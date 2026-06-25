@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var floating: FloatingButton?
     private var cardPopup: CardPopup?
     private var lastSelPoint: NSPoint = .zero   // 最近一次划词位置（卡片在此下方弹出）
+    private var lastSelText: String = ""        // 划词时已抓到的文字（点药丸直接用，保证有内容）
     private var mouseUpMonitor: Any?
     private var dismissMonitor: Any?
     private var downPoint: NSPoint = .zero
@@ -55,24 +56,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func onMouseUp() {
         guard popupEnabled, Api.isLoggedIn else { return }
         let up = NSEvent.mouseLocation
-        let dragged = hypot(up.x - downPoint.x, up.y - downPoint.y) > 8  // 拖拽 >8px 视为划词
-        // 略等一下，让前台 App 先把选区生效
+        let dragged = hypot(up.x - downPoint.x, up.y - downPoint.y) > 6  // 必须真的划动过才算划词
+        // 纯点击（没划动）不弹浮窗——避免一点鼠标就冒泡
+        guard dragged else { lastSelText = ""; floating?.hide(); return }
+        // 略等一下让前台 App 把选区生效，然后真的抓一次文字：先 AX，取不到再 ⌘C。
+        // 只有抓到内容才弹浮窗（顺便缓存，点药丸时直接用，既保证有内容又免去二次抓取）。
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             guard let self = self else { return }
             guard Capture.accessibilityTrusted(prompt: false) else { return }
-            let ax = (Capture.selectedTextAXOnly() ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !ax.isEmpty || dragged {
+            let text = Capture.selectedText().trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                self.lastSelText = text
                 self.lastSelPoint = up        // 记下划词位置，AI 卡片在此下方弹出
-                self.floating?.show(at: up)   // 有 AX 选中，或发生了拖拽 → 弹浮窗（点击时再抓文字）
+                self.floating?.show(at: up)
             } else {
-                self.floating?.hide()
+                self.lastSelText = ""
+                self.floating?.hide()         // 划了但没选中文字 → 不弹
             }
         }
     }
 
-    // 点浮窗时才抓文字：先 AX，取不到再 ⌘C 回退（仅此刻碰一次剪贴板，用完还原）
+    // 点浮窗时直接用划词时已抓到的文字（保证有内容）；极端情况下缓存空了再补抓一次
     private func collectFromPopup(_ mode: String) {
-        let text = Capture.selectedText().trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = lastSelText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty { text = Capture.selectedText().trimmingCharacters(in: .whitespacesAndNewlines) }
         guard !text.isEmpty else { flash("没选中文字"); return }
         if mode == "ai" { showAICard(text: text) }   // ✨解读 → 桌面就地弹解读卡片
         else { send(text: text, mode: "direct") }     // 收集 → 直接存卡
@@ -102,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Api.postClip(text: text, source: app, sourceTitle: app, mode: "ai") { [weak self] result in
             switch result {
             case .success:
-                self?.cardPopup?.hide()
+                self?.cardPopup?.animateOut()   // 淡出收尾动效，再收起
                 self?.flash("✓ 已加入卡片")
             case .failure(let msg):
                 self?.flash(msg)
