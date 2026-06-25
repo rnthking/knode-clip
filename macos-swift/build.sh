@@ -27,12 +27,26 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>KnodeClip</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>用于读取选中文字</string>
 </dict>
 </plist>
 PLIST
+
+# 应用图标：从 AppIcon.png 生成 AppIcon.icns 放进 Resources（Finder/dmg 里显示品牌图标）
+if [ -f "AppIcon.png" ]; then
+  echo "==> 生成应用图标 AppIcon.icns"
+  mkdir -p "$APP/Contents/Resources"
+  ICONSET="$(mktemp -d)/AppIcon.iconset"; mkdir -p "$ICONSET"
+  for s in 16 32 128 256 512; do
+    sips -z $s $s        AppIcon.png --out "$ICONSET/icon_${s}x${s}.png"    >/dev/null
+    sips -z $((s*2)) $((s*2)) AppIcon.png --out "$ICONSET/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns" && echo "    图标已写入" || echo "（iconutil 失败，跳过图标）"
+  rm -rf "$ICONSET"
+fi
 
 # Ad-hoc 签名：让下载后的 App 能右键→打开（Apple Silicon 上未签名+quarantine 会被拦成「已损坏」）。
 # 仍是"未识别开发者"，首次需右键→打开；但不再是硬性"已损坏"。
